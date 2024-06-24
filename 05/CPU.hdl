@@ -1,0 +1,99 @@
+// This file is part of www.nand2tetris.org
+// and the book "The Elements of Computing Systems"
+// by Nisan and Schocken, MIT Press.
+// File name: projects/05/CPU.hdl
+
+/**
+ * The Hack CPU (Central Processing unit), consisting of an ALU,
+ * two registers named A and D, and a program counter named PC.
+ * The CPU is designed to fetch and execute instructions written in 
+ * the Hack machine language. In particular, functions as follows:
+ * Executes the inputted instruction according to the Hack machine 
+ * language specification. The D and A in the language specification
+ * refer to CPU-resident registers, while M refers to the external
+ * memory location addressed by A, i.e. to Memory[A]. The inM input 
+ * holds the value of this location. If the current instruction needs 
+ * to write a value to M, the value is placed in outM, the address 
+ * of the target location is placed in the addressM output, and the 
+ * writeM control bit is asserted. (When writeM==0, any value may 
+ * appear in outM). The outM and writeM outputs are combinational: 
+ * they are affected instantaneously by the execution of the current 
+ * instruction. The addressM and pc outputs are clocked: although they 
+ * are affected by the execution of the current instruction, they commit 
+ * to their new values only in the next time step. If reset==1 then the 
+ * CPU jumps to address 0 (i.e. pc is set to 0 in next time step) rather 
+ * than to the address resulting from executing the current instruction. 
+ */
+
+CHIP CPU {
+
+    IN  inM[16],         // M value input  (M = contents of RAM[A])
+        instruction[16], // Instruction for execution
+        reset;           // Signals whether to re-start the current
+                         // program (reset==1) or continue executing
+                         // the current program (reset==0).
+
+    OUT outM[16],        // M value output
+        writeM,          // Write to M? 
+        addressM[15],    // Address in data memory (of M)
+        pc[15];          // address of next instruction
+
+    PARTS:
+	// The C instruction: 111a c1c2c3c4 c5c6d1d2 d3j1j2j3
+	// The A instruction: 0vvv vvvv vvvv vvvv
+	//MSB = instruction[15]; MSB==0: A instruction. MSB==1: C instruction.
+	
+	// load ARegister
+	// A instruction
+    Not (in=instruction[15], out=Ainstruction);
+	// C instruction (MSB==1) and d1 (dest A == 1)
+	And (a=instruction[15], b=instruction[5], out=Candd1);
+	Or (a=Ainstruction, b=Candd1, out=loadAregister);
+	Mux16 (a=instruction, b=outALU, sel=instruction[15], out=inARegister);
+	ARegister (in=inARegister, load=loadAregister, out=outAregister, out[0..14]=addressM);
+	
+	ALU (x=outDregister, y=inALU, zx=instruction[11], nx=instruction[10], zy=instruction[9], 
+	ny=instruction[8], f=instruction[7], no=instruction[6], out=outM, out=outALU, zr=zr, ng=ng);
+	
+	// C instruction (MSB==1) and d2 (dest D == 1)
+	And (a=instruction[15], b=instruction[4], out=Candd2);
+	DRegister (in=outALU, load=Candd2, out=outDregister);
+	
+	// a = instruction[12]
+	Mux16 (a=outAregister, b=inM, sel=instruction[12], out=inALU);
+
+	
+	// Using of zr, ng bits
+	// No jump (always 0)
+	Not (in=true, out=null);
+	// if out > 0 jump
+	Not (in=JLE, out=JGT);
+	// if out=0 jump
+	And (a=zr, b=zr, out=JEQ);
+	// if out >= 0 jump
+	Or (a=JGT, b=JEQ, out=JGE);
+	// if out < 0 jump
+	Not (in=JGT, out=JLT);
+	// if out != 0 jump
+	Not (in=JEQ, out=JNE);
+	// if out <= 0 jump
+	Not (in=JGT, out=JLE);
+	// jump
+	Not (in=false, out=JMP);
+	
+	
+	Mux8Way (a=null, b=JGT, c=JEQ, d=JGE, e=JLT, f=JNE, g=JLE, h=JMP, sel=instruction[0..2], out=outMux8Way);
+	// jump bits are relevant only when C instruction.
+	And (a=instruction[15], b=outMux8Way, out=gfunc);
+	
+	// we have built (project3) the PC in a way that the priority is:
+	// 1.reset   2.load   3.inc 
+	// if reset=1 -> pc=0
+	// else if load=1 (and reset=0) -> PC=A. We jump assuming A has the desired address.
+	// else PC++
+	PC (in=outAregister, load=gfunc, inc=true, reset=reset, out[0..14]=pc);
+	
+	
+	//writeM if C instruction and d3 (dest M == 1)
+	And (a=instruction[15], b=instruction[3], out=writeM);
+}
