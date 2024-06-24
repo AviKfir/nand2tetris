@@ -1,0 +1,84 @@
+// This file is part of www.nand2tetris.org
+// and the book "The Elements of Computing Systems"
+// by Nisan and Schocken, MIT Press.
+// File name: projects/12/Memory.jack
+
+/**
+ * This library provides two services: direct access to the computer's main
+ * memory (RAM), and allocation and recycling of memory blocks. The Hack RAM
+ * consists of 32,768 words, each holding a 16-bit binary number.
+ */ 
+class Memory {
+
+    static Array free_list;
+    static int heap_start, len_, next_val_;
+    static int size_gt_;
+    static Array block_;
+
+    /** Initializes the class. */
+    function void init() {
+        let heap_start = 2048;
+
+        let next_val_ = 1;
+        let len_ = 0;
+        let size_gt_ = 2;
+        let free_list = heap_start;
+        let free_list[0] = 14335;
+        let free_list[1] = null;
+        return;
+    }
+
+    /** Returns the RAM value at the given address. */
+    function int peek(int address) {
+        var Array memory_val;
+        let memory_val = address;
+        return memory_val[0];
+    }
+
+    /** Sets the RAM value at the given address to the given value. */
+    function void poke(int address, int value) {
+        var Array memory_val;
+        let memory_val = address;
+        let memory_val[0] = value;
+        return;
+    }
+
+
+    /** Finds an available RAM block of the given size and returns
+     *  a reference to its base address. */
+    function int alloc(int size) {
+        var Array curr_block, prev_block, next_block;
+        let prev_block = 0;
+        let curr_block = free_list;
+        while (curr_block[len_] < size){
+            let prev_block = curr_block;
+            let curr_block = curr_block[next_val_];
+            if (curr_block = null){ return -1;} // return failure
+
+        }
+
+        let next_block = curr_block + size_gt_ + size;
+        let next_block[len_] = curr_block[len_] - size - size_gt_;
+        let next_block[next_val_] = curr_block[next_val_];
+        let curr_block[len_] = size;
+        let curr_block[next_val_] = null;
+
+        if (prev_block = 0){ let free_list = next_block;
+        }
+        else { let prev_block[next_val_] = next_block;
+        }
+
+        return curr_block + 2;
+
+        
+    }
+
+    /** De-allocates the given object (cast as an array) by making
+     *  it available for future allocations. */
+    function void deAlloc(Array obj) {
+        let block_ = obj - size_gt_;
+        let block_[next_val_] = free_list;
+        let free_list = block_;
+        return;
+    }    
+}
